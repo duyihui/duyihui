@@ -1,0 +1,98 @@
+<?php
+class Ocr
+{
+    const SecretId = "";
+    const SecretKey = "";
+
+    private function getSign($str)
+    {
+        $type = "GET";   //请求方式
+        $host = "ocr.tencentcloudapi.com";  //请求主机
+        $path = "/";  //请求路径
+        $srcStr = $type . $host . $path . "?" . $str;
+        $sig = base64_encode(hash_hmac('sha1', $srcStr, self::SecretKey, true));
+        return urlencode($sig);
+    }
+
+    public function start($imagesUrl)
+    {
+        $nonce = rand(1000, 9999);
+        $req = [
+            'Action' => "GeneralAccurateOCR",
+            'Nonce' => $nonce,
+            'SecretId' => self::SecretId,
+            'Region' => "ap-beijing",
+            'Timestamp' => time(),
+            'Version' => "2018-11-19",
+            'ImageUrl' => $imagesUrl,
+        ];
+
+        $str = $this->formatData($req);
+        $sig = $this->getSign($str);
+        $req['Signature'] = $sig;
+        $reqUrl = "https://ocr.tencentcloudapi.com/?" . $str . "&Signature=" . $sig;
+        $result = $this->curl($reqUrl, "get");
+        echo "<pre>";
+        print_r(json_decode($result,true));
+    }
+
+    private function formatData($data)
+    {
+        ksort($data);
+
+        $str = "";
+        $s = 0;
+        foreach ($data as $k => $v) {
+            if ($s == count($data) - 1) {
+                $str .= $k . "=" . $v;
+            } else {
+                $str .= $k . "=" . $v . "&";
+            }
+            $s++;
+        }
+
+        return $str;
+    }
+
+    function curl($url = "", $method = "get", $post_data = "", $timeout = "0")
+    {
+        if (!function_exists('curl_init')) {
+            \think\Log::write('未开启curl功能');
+            return false;
+        }
+        $headers = [
+            'Content-Type' => 'application/x-www-form-urlencoded'
+        ];
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_HEADER, 0);//不显示header信息
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);//结果保存到字符串中
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        switch (strtolower($method)) {
+            case 'get':
+                $url .= !empty($post_data) ? ((strpos($url, '?') ? '&' : '?') . (is_array($post_data) ? http_build_query($post_data) : $post_data)) : '';
+                break;
+            case 'post':
+                curl_setopt($ch, CURLOPT_POST, 1);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $post_data);
+                break;
+            case 'put':
+                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'put');
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $post_data);
+                break;
+            default:
+                return false;
+                break;
+        }
+        curl_setopt($ch, CURLOPT_URL, $url);//地址
+        $result = curl_exec($ch);
+        curl_close($ch);
+        return $result;
+    }
+
+}
+$obj = new Ocr();
+$imageUrl = "test.jpg";
+$obj->start($imgeUrl);
